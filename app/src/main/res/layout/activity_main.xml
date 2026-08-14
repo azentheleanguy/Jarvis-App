@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="JARVIS // voice console"
+        android:textColor="@color/primary"
+        android:textSize="13sp"
+        android:letterSpacing="0.2"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:fontFamily="monospace" />
+
+    <com.jarvis.assistant.IrisView
+        android:id="@+id/irisView"
+        android:layout_width="280dp"
+        android:layout_height="280dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="30dp" />
+
+    <TextView
+        android:id="@+id/statusWord"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SLEEPING"
+        android:textColor="@color/primary"
+        android:textSize="14sp"
+        android:letterSpacing="0.25"
+        android:gravity="center"
+        android:layout_marginTop="16dp"
+        android:fontFamily="monospace" />
+
+    <TextView
+        android:id="@+id/statusSub"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="say &quot;jarvis&quot; to wake"
+        android:textColor="@color/muted"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:layout_marginTop="4dp"
+        android:fontFamily="monospace" />
+
+    <TextView
+        android:id="@+id/transcript"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textColor="@color/text"
+        android:textSize="15sp"
+        android:gravity="center"
+        android:layout_marginTop="18dp"
+        android:fontFamily="monospace" />
+
+    <Button
+        android:id="@+id/toggleBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Start Jarvis (background service)"
+        android:backgroundTint="@color/bg2"
+        android:textColor="@color/primary" />
+
+    <Button
+        android:id="@+id/accessibilityBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Enable WhatsApp Control (Accessibility)"
+        android:backgroundTint="@color/bg2"
+        android:textColor="@color/amber" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="16dp">
+
+        <TextView
+            android:id="@+id/logView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/muted"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="6dp" />
+    </ScrollView>
+
+</LinearLayout>
