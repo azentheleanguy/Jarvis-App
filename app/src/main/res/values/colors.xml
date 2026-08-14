@@ -1,0 +1,10 @@
+<resources>
+    <color name="bg">#05080A</color>
+    <color name="bg2">#0A1210</color>
+    <color name="primary">#4AE8A4</color>
+    <color name="primaryDim">#245A45</color>
+    <color name="amber">#F2A65A</color>
+    <color name="red">#EF5B5B</color>
+    <color name="text">#DCEAE4</color>
+    <color name="muted">#5F7A72</color>
+</resources>
