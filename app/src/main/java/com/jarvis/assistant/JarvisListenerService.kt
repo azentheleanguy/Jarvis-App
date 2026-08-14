@@ -2,15 +2,22 @@ package com.jarvis.assistant
 
 import android.app.*
 import android.content.Intent
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.core.app.NotificationCompat
+import java.io.File
 import java.util.Locale
 
+/**
+ * Runs as a foreground service (persistent notification, as Android requires)
+ * so the wake-word listener survives even when the Jarvis screen isn't open.
+ */
 class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
 
     companion object {
@@ -24,6 +31,8 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
     private var awake = false
     private var justWoke = false
     private var restartPending = false
+    private var awakeRetries = 0
+    private var mediaPlayer: MediaPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -108,26 +117,47 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
         }, 1200)
     }
 
+    // Called when a recognition session finalizes.
     private fun handleFinalResult(heard: String) {
         if (justWoke) {
+            // This session is the one where we detected "jarvis" mid-utterance.
             justWoke = false
             val idx = heard.indexOf("jarvis")
             val after = if (idx >= 0) heard.substring(idx + "jarvis".length).trim() else ""
             if (after.isBlank()) {
+                // They only said the wake word so far — stay awake, listen for the command next.
                 restartListening()
             } else {
+                // "jarvis call bash" said in one breath — treat the rest as the command.
                 awake = false
+                awakeRetries = 0
                 processCommand(after)
                 restartListening()
             }
             return
         }
         if (awake) {
+            if (heard.isBlank()) {
+                // Recognizer caught silence/nothing usable — don't burn the wake state on this,
+                // give it a few more tries before actually giving up.
+                awakeRetries++
+                if (awakeRetries >= 4) {
+                    awake = false
+                    awakeRetries = 0
+                    updateStatus(IrisMode.SLEEP, "SLEEPING", "say \"jarvis\" to wake", null)
+                    updateNotification("Sleeping", "Say \"Jarvis\" to wake")
+                }
+                restartListening()
+                return
+            }
+            // A fresh utterance after we already said "Yes?" — this IS the command.
             awake = false
+            awakeRetries = 0
             processCommand(heard)
             restartListening()
             return
         }
+        // Not awake, no wake word this session — nothing to do.
         restartListening()
     }
 
@@ -144,7 +174,42 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun speak(text: String) {
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "jarvis_utt")
+        val engine = tts
+        if (engine == null || text.isBlank()) return
+
+        val rawFile = File(cacheDir, "jarvis_raw.wav")
+        val fxFile = File(cacheDir, "jarvis_fx.wav")
+        val utteranceId = "jarvis_utt_${System.currentTimeMillis()}"
+
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) {
+                val playFile = try {
+                    RoboticVoice.applyRingMod(rawFile, fxFile)
+                    fxFile
+                } catch (e: Exception) {
+                    // Effect failed for some reason — still play the plain speech rather than staying silent.
+                    rawFile
+                }
+                android.os.Handler(mainLooper).post { playFile(playFile) }
+            }
+            override fun onError(utteranceId: String?) {}
+        })
+
+        engine.synthesizeToFile(text, Bundle(), rawFile, utteranceId)
+    }
+
+    private fun playFile(file: File) {
+        try {
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                prepare()
+                start()
+            }
+        } catch (e: Exception) {
+            // If playback fails, don't crash the service — just skip this line.
+        }
     }
 
     private fun updateStatus(mode: IrisMode, word: String, sub: String, log: String?) {
@@ -175,6 +240,7 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         recognizer?.destroy()
         tts?.shutdown()
+        mediaPlayer?.release()
         super.onDestroy()
     }
 
