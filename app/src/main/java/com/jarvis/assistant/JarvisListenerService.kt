@@ -11,11 +11,20 @@ import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
 import java.util.Locale
 
+/**
+ * Runs as a foreground service (persistent notification, as Android requires)
+ * so the wake-word listener survives even when the Jarvis screen isn't open.
+ * This is the piece that makes "24/7 listening" actually possible on Android —
+ * a plain browser tab or background-less app cannot do this.
+ */
 class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
 
     companion object {
         const val CHANNEL_ID = "jarvis_listener"
         const val NOTIF_ID = 1
+
+        // Simple static bridge so MainActivity can reflect live status in the UI
+        // when it happens to be open. The service works fine with no listener attached.
         var statusListener: ((mode: IrisMode, statusWord: String, statusSub: String, log: String?) -> Unit)? = null
     }
 
@@ -39,7 +48,7 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
+        return START_STICKY // ask Android to restart this service if it gets killed
     }
 
     private fun startListening() {
@@ -75,6 +84,9 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000)
         }
         recognizer?.startListening(intent)
     }
@@ -83,10 +95,11 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
         if (restartPending) return
         restartPending = true
         recognizer?.destroy()
+        // brief delay avoids hammering the recognizer, which errors if restarted instantly
         android.os.Handler(mainLooper).postDelayed({
             restartPending = false
             startListening()
-        }, 350)
+        }, 1200)
     }
 
     private fun onHeard(heard: String) {
@@ -99,6 +112,7 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
             }
             return
         }
+        // awake: treat this utterance as the command
         awake = false
         updateStatus(IrisMode.THINKING, "THINKING", heard, "You: $heard")
         val result = CommandRouter.handle(this, heard)
