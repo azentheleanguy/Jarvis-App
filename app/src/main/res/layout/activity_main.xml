@@ -17,12 +17,24 @@
         android:paddingBottom="8dp"
         android:fontFamily="monospace" />
 
-    <com.jarvis.assistant.IrisView
-        android:id="@+id/irisView"
-        android:layout_width="280dp"
-        android:layout_height="280dp"
+    <FrameLayout
+        android:layout_width="320dp"
+        android:layout_height="320dp"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="30dp" />
+        android:layout_marginTop="30dp">
+
+        <View
+            android:layout_width="320dp"
+            android:layout_height="320dp"
+            android:background="@drawable/iris_backdrop" />
+
+        <com.jarvis.assistant.IrisView
+            android:id="@+id/irisView"
+            android:layout_width="280dp"
+            android:layout_height="280dp"
+            android:layout_gravity="center" />
+
+    </FrameLayout>
 
     <TextView
         android:id="@+id/statusWord"
