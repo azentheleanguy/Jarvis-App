@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Jarvis</string>
+    <string name="accessibility_service_description">Lets Jarvis type and send messages in WhatsApp on your behalf, only after you say your wake word and give a command. You can turn this off anytime in Settings.</string>
+</resources>
