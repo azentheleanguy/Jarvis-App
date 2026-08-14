@@ -11,26 +11,18 @@ import android.speech.tts.TextToSpeech
 import androidx.core.app.NotificationCompat
 import java.util.Locale
 
-/**
- * Runs as a foreground service (persistent notification, as Android requires)
- * so the wake-word listener survives even when the Jarvis screen isn't open.
- * This is the piece that makes "24/7 listening" actually possible on Android —
- * a plain browser tab or background-less app cannot do this.
- */
 class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
 
     companion object {
         const val CHANNEL_ID = "jarvis_listener"
         const val NOTIF_ID = 1
-
-        // Simple static bridge so MainActivity can reflect live status in the UI
-        // when it happens to be open. The service works fine with no listener attached.
         var statusListener: ((mode: IrisMode, statusWord: String, statusSub: String, log: String?) -> Unit)? = null
     }
 
     private var recognizer: SpeechRecognizer? = null
     private var tts: TextToSpeech? = null
     private var awake = false
+    private var justWoke = false
     private var restartPending = false
 
     override fun onCreate() {
@@ -44,11 +36,23 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.US
+            tts?.setPitch(0.85f)
+            tts?.setSpeechRate(0.95f)
+            selectBestVoice()
         }
     }
 
+    private fun selectBestVoice() {
+        val engine = tts ?: return
+        val voices = engine.voices ?: return
+        val candidate = voices
+            .filter { it.locale == Locale.US && !it.isNetworkConnectionRequired }
+            .maxByOrNull { it.quality }
+        candidate?.let { engine.voice = it }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY // ask Android to restart this service if it gets killed
+        return START_STICKY
     }
 
     private fun startListening() {
@@ -61,14 +65,17 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
             override fun onResults(results: Bundle?) {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 val heard = matches?.firstOrNull()?.lowercase() ?: ""
-                onHeard(heard)
-                restartListening()
+                handleFinalResult(heard)
             }
             override fun onPartialResults(partialResults: Bundle?) {
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 val heard = matches?.firstOrNull()?.lowercase() ?: ""
                 if (!awake && heard.contains("jarvis")) {
-                    onHeard(heard)
+                    awake = true
+                    justWoke = true
+                    updateStatus(IrisMode.LISTENING, "LISTENING", "go ahead", "Wake word detected")
+                    speak("Yes?")
+                    updateNotification("Listening", "Go ahead")
                 }
             }
             override fun onError(error: Int) { restartListening() }
@@ -95,25 +102,36 @@ class JarvisListenerService : Service(), TextToSpeech.OnInitListener {
         if (restartPending) return
         restartPending = true
         recognizer?.destroy()
-        // brief delay avoids hammering the recognizer, which errors if restarted instantly
         android.os.Handler(mainLooper).postDelayed({
             restartPending = false
             startListening()
         }, 1200)
     }
 
-    private fun onHeard(heard: String) {
-        if (!awake) {
-            if (heard.contains("jarvis")) {
-                awake = true
-                updateStatus(IrisMode.LISTENING, "LISTENING", "go ahead", "Wake word detected")
-                speak("Yes?")
-                updateNotification("Listening", "Go ahead")
+    private fun handleFinalResult(heard: String) {
+        if (justWoke) {
+            justWoke = false
+            val idx = heard.indexOf("jarvis")
+            val after = if (idx >= 0) heard.substring(idx + "jarvis".length).trim() else ""
+            if (after.isBlank()) {
+                restartListening()
+            } else {
+                awake = false
+                processCommand(after)
+                restartListening()
             }
             return
         }
-        // awake: treat this utterance as the command
-        awake = false
+        if (awake) {
+            awake = false
+            processCommand(heard)
+            restartListening()
+            return
+        }
+        restartListening()
+    }
+
+    private fun processCommand(heard: String) {
         updateStatus(IrisMode.THINKING, "THINKING", heard, "You: $heard")
         val result = CommandRouter.handle(this, heard)
         val reply = if (result.handled) result.spokenReply else "I heard: $heard. That's not a command I know yet."
